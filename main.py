@@ -16,11 +16,12 @@
 import os
 from datetime import datetime
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 import pandas as pd
 import requests
 
 # fun style
-plt.style.use('fivethirtyeight')
+plt.style.use('ggplot')
 
 print('*********************')
 print('*COVID-19 Visualizer*')
@@ -42,7 +43,7 @@ if os.path.isfile('PUBLIC_CDC_Event_Date_SARS.xlsx'):
         open('PUBLIC_CDC_Event_Date_SARS.xlsx', 'wb').write(downloadedFile.content)
         print('Dataset downloaded successfully')
     else:
-        print('File is already updated and exists!')
+        print('Dataset is already updated and exists!')
 else:
     print('Dataset does not yet exist, proceeding to download!')
     downloadedFile = requests.get('https://www.doh.wa.gov/Portals/1/Documents/1600/coronavirus/data-tables'
@@ -53,6 +54,7 @@ else:
 excelFile = pd.ExcelFile('PUBLIC_CDC_Event_Date_SARS.xlsx')
 cases = pd.read_excel(excelFile, 'Cases')
 deaths = pd.read_excel(excelFile, 'Deaths')
+hospitalizations = pd.read_excel(excelFile, 'Hospitalizations')
 
 
 # computes death to case ratio
@@ -60,9 +62,21 @@ def deathtocase(fatalities, positives):
     return fatalities / positives
 
 
+def setticks(ax, every_nth):
+    for n, label in enumerate(ax.xaxis.get_ticklabels()):
+        if n % every_nth != 0:
+            label.set_visible(False)
+
+
+def makeplot(ax, xcoord, ycoord, name, color):
+    ax.plot(xcoord, ycoord, label=name, c=color)
+    ax.legend()
+    ax.set(xlabel='Date', ylabel='# of people')
+    setticks(ax, 9)
+
+
 # "main" method
 while True:
-
     totalwacase = cases['NewPos_All'].sum()
     totalwadeath = deaths['Deaths'].sum()
     wadtr = deathtocase(totalwadeath, totalwacase)
@@ -71,31 +85,30 @@ while True:
     print('Total YTD cases in Washington as of ' + str(onlineupdate) + ': ' + str(totalwacase))
     print('Death to case ratio in Washington as of ' + str(onlineupdate) + ': ' + str(wadtr))
 
-    county = input('Please enter a Washington county: ')
+    county = input('\n\nPlease enter a Washington county: ')
     if county == 'quit' or county == 'q':
         break
 
     countycase = cases.loc[cases['County'] == county]
     countydeath = deaths.loc[deaths['County'] == county]
-    countyhospitalizations = deaths.loc[deaths['County'] == county]
+    countyhosp = hospitalizations.loc[hospitalizations['County'] == county]
 
     sumDeaths = countydeath['Deaths'].sum()
     sumCases = countycase['NewPos_All'].sum()
-    print('Total YTD cases in ' + county + ': ' + str(sumCases))
-    print('Total YTD deaths in ' + county + ': ' + str(sumDeaths))
-    print('Death to case ratio in ' + county + ': ' + str(deathtocase(sumDeaths, sumCases)))
+    print('Total YTD cases in ' + county + ' as of ' + str(onlineupdate) + ': ' + str(sumCases))
+    print('Total YTD deaths in ' + county + ' as of ' + str(onlineupdate) + ': ' + str(sumDeaths))
+    print('Death to case ratio in ' + county + ' as of ' + str(onlineupdate) + ': ' + str(
+        deathtocase(sumDeaths, sumCases)))
 
-    fig, ax = plt.subplots()
-    ax.plot(countycase['WeekStartDate'], countycase['NewPos_All'], label='Cases', c='crimson')
-    ax.plot(countydeath['WeekStartDate'], countydeath['Deaths'], label='Deaths', c='lime')
-    ax.legend()
+    gs = gridspec.GridSpec(2, 2)
+    fig = plt.figure()
+    ax1 = fig.add_subplot(gs[0, 0])
+    makeplot(ax1, countycase['WeekStartDate'], countycase['NewPos_All'], 'Cases', 'crimson')
+    ax2 = fig.add_subplot(gs[0, 1])
+    makeplot(ax2, countydeath['WeekStartDate'], countydeath['Deaths'], 'Deaths', 'lime')
+    ax3 = fig.add_subplot(gs[1, :])
+    makeplot(ax3, countyhosp['WeekStartDate'], countyhosp['Hospitalizations'], 'Hospitalizations', 'darkblue')
 
-    every_nth = 6
-    for n, label in enumerate(ax.xaxis.get_ticklabels()):
-        if n % every_nth != 0:
-            label.set_visible(False)
-
-    plt.title('Weekly COVID-19 Cases and Deaths in ' + county, fontsize='small')
-    plt.xlabel('Date', fontsize='small')
-    plt.ylabel('Number of People', fontsize='small')
+    fig.suptitle('COVID-19 Data in ' + county, fontsize=16)
     plt.show()
+    print('\n\n\n')
