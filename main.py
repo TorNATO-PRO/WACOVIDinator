@@ -12,6 +12,9 @@
 #      You should have received a copy of the GNU General Public License
 #      along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+# This program parses COVID-19 data from the Washington State Department of Health
+# I DON'T OWN THE DATA
+
 
 import os
 from datetime import datetime
@@ -68,6 +71,19 @@ class WAPop:
     }
 
 
+def hasconnection():
+    url = 'https://www.doh.wa.gov/Portals/1/Documents/1600/coronavirus/'
+    timeout = 5
+    print('Checking internet connection')
+    try:
+        requests.get(url, timeout=timeout)
+        return True
+    except requests.ConnectionError:
+        print("Internet is currently down!")
+        return False
+
+
+# initializes a population object
 population = WAPop()
 
 # fun style
@@ -77,28 +93,34 @@ print('*********************')
 print('*COVID-19 Visualizer*')
 print('*********************\n')
 
-onlinedatasetinfo = requests.head('https://www.doh.wa.gov/Portals/1/Documents/1600/coronavirus/data-tables'
-                                  '/PUBLIC_CDC_Event_Date_SARS.xlsx?ver=20201121144748')
+onlineupdate = 'unknown'
 
-onlineupdate = datetime.strptime(onlinedatasetinfo.headers['Last-Modified'], '%a, %d %b %Y %H:%M:%S GMT')
+if hasconnection():
+    onlinedatasetinfo = requests.head('https://www.doh.wa.gov/Portals/1/Documents/1600/coronavirus/data-tables'
+                                      '/PUBLIC_CDC_Event_Date_SARS.xlsx?ver=20201121144748')
+    onlineupdate = datetime.strptime(onlinedatasetinfo.headers['Last-Modified'], '%a, %d %b %Y %H:%M:%S GMT')
+    if os.path.isfile('PUBLIC_CDC_Event_Date_SARS.xlsx'):
+        downloaded = os.stat('PUBLIC_CDC_Event_Date_SARS.xlsx').st_mtime
 
-if os.path.isfile('PUBLIC_CDC_Event_Date_SARS.xlsx'):
-    downloaded = os.stat('PUBLIC_CDC_Event_Date_SARS.xlsx').st_mtime
-    if onlineupdate > datetime.fromtimestamp(downloaded):  # if the online version is newer
-        print('Dataset is out of date, deleting the old file!')
-        os.remove('PUBLIC_CDC_Event_Date_SARS.xlsx')
-        print('Downloading new dataset')
+        if onlineupdate > datetime.fromtimestamp(downloaded):  # if the online version is newer
+            print('Dataset is out of date, deleting the old file!')
+            os.remove('PUBLIC_CDC_Event_Date_SARS.xlsx')
+            print('Downloading new dataset')
+            downloadedFile = requests.get('https://www.doh.wa.gov/Portals/1/Documents/1600/coronavirus/data-tables'
+                                          '/PUBLIC_CDC_Event_Date_SARS.xlsx?ver=20201121144748')
+            open('PUBLIC_CDC_Event_Date_SARS.xlsx', 'wb').write(downloadedFile.content)
+            print('Dataset downloaded successfully')
+
+        else:
+            print('Dataset is already updated and exists!')
+
+    else:
+        print('Dataset does not yet exist, proceeding to download!')
         downloadedFile = requests.get('https://www.doh.wa.gov/Portals/1/Documents/1600/coronavirus/data-tables'
                                       '/PUBLIC_CDC_Event_Date_SARS.xlsx?ver=20201121144748')
         open('PUBLIC_CDC_Event_Date_SARS.xlsx', 'wb').write(downloadedFile.content)
-        print('Dataset downloaded successfully')
-    else:
-        print('Dataset is already updated and exists!')
 else:
-    print('Dataset does not yet exist, proceeding to download!')
-    downloadedFile = requests.get('https://www.doh.wa.gov/Portals/1/Documents/1600/coronavirus/data-tables'
-                                  '/PUBLIC_CDC_Event_Date_SARS.xlsx?ver=20201121144748')
-    open('PUBLIC_CDC_Event_Date_SARS.xlsx', 'wb').write(downloadedFile.content)
+    print('As there is no connection detected, proceeding to next part of the program')
 
 # reading the file's data
 excelFile = pd.ExcelFile('PUBLIC_CDC_Event_Date_SARS.xlsx')
@@ -111,16 +133,11 @@ deaths = pd.read_excel(excelFile, 'Deaths',
 hospitalizations = pd.read_excel(excelFile, 'Hospitalizations',
                                  usecols=['WeekStartDate', 'Hospitalizations', 'County'],
                                  parse_dates=['WeekStartDate'])
+knownhosp = hospitalizations[hospitalizations['WeekStartDate'] != 'Unknown']  # removes unknown dates
 cases.set_index('WeekStartDate', inplace=True)
 deaths.set_index('WeekStartDate', inplace=True)
-knownhosp = hospitalizations[hospitalizations['WeekStartDate'] != 'Unknown']
 knownhosp.set_index('WeekStartDate', inplace=True)
 hospitalizations.set_index('WeekStartDate', inplace=True)
-
-
-# computes death to case ratio
-def ratioer(fatalities, positives):
-    return fatalities / positives
 
 
 def setticks(ax, every_nth):
@@ -136,26 +153,35 @@ def makeplot(ax, xcoord, ycoord, name, color):
     setticks(ax, 9)
 
 
+# relevant calculations
 totalwacase = cases['NewPos_All'].sum()
 totalwadeath = deaths['Deaths'].sum()
 totalwahosp = hospitalizations['Hospitalizations'].sum()
-wadtr = ratioer(totalwadeath, totalwacase)
+wadeathtocase = totalwadeath / totalwacase
+wadeathtopop = totalwadeath / population.washingtonPopulation
+wahosptocase = totalwahosp / totalwacase
+wadeathtohosp = totalwadeath / totalwahosp
+wacasetopop = totalwacase / population.washingtonPopulation
+wahosptopop = totalwahosp / population.washingtonPopulation
 
-print('Total YTD deaths in Washington as of ' + str(onlineupdate) + ': ' + str(totalwadeath))
-print('Total YTD cases in Washington as of ' + str(onlineupdate) + ': ' + str(totalwacase))
-print('Total YTD hospitalizations in Washington as of ' + str(onlineupdate) + ': ' + str(totalwahosp))
-print('Death to population ratio as of ' + str(onlineupdate) + ': ' + str(totalwadeath /
-                                                                          population.washingtonPopulation))
-print('YTD Hospitalization to case ratio in Washington as of ' + str(onlineupdate) + ': ' +
-      str(ratioer(totalwahosp, totalwacase)))
-print('YTD Hospitalization to death ratio in Washington as of ' + str(onlineupdate) + ': ' +
-      str(ratioer(totalwahosp, totalwadeath)))
-print('Case to population ratio as of ' + str(onlineupdate) + ': ' + str(totalwacase /
-                                                                         population.washingtonPopulation))
-print('Hospitalization to population ratio as of ' + str(onlineupdate)
-      + ': ' + str(totalwahosp /
-      population.washingtonPopulation))
-print('Death to case ratio in Washington as of ' + str(onlineupdate) + ': ' + str(wadtr))
+# relevant Washington information
+print('Total YTD deaths in Washington as of {0}: {1}'.format(str(onlineupdate), str(totalwadeath)))
+print('Total YTD cases in Washington as of {0}: {1}'.format(str(onlineupdate), str(totalwacase)))
+print('Total YTD hospitalizations in Washington as of {0}: {1}'.format(str(onlineupdate), str(totalwahosp)))
+print('Death to population ratio as of {0}: {1} ({2}%)'.format(str(onlineupdate), str(wadeathtopop),
+                                                               str(wadeathtopop * 100)))
+print('YTD Hospitalization to case ratio in Washington as of {0}: {1} ({2}%)'.format(str(onlineupdate),
+                                                                                     str(wahosptocase),
+                                                                                     str(wahosptocase * 100)))
+print('YTD death to hospitalization ratio in Washington as of {0}: {1} ({2}%)'.format(str(onlineupdate),
+                                                                                      str(wadeathtohosp),
+                                                                                      str(wadeathtohosp * 100)))
+print('Case to population ratio as of {0}: {1} ({2}%)'.format(str(onlineupdate), str(wacasetopop),
+                                                              str(wacasetopop * 100)))
+print('Hospitalization to population ratio as of {0}: {1} ({2}%)'.format(str(onlineupdate), str(wahosptopop),
+                                                                         str(wahosptopop * 100)))
+print('Death to case ratio in Washington as of {0}: {1} ({2}%)'.format(str(onlineupdate), str(wadeathtocase),
+                                                                       str(wadeathtocase * 100)))
 
 # "main" method
 while True:
@@ -163,29 +189,54 @@ while True:
     if county == 'quit' or county == 'q':
         break
 
+    # parses relevant data
     countycase = cases.loc[cases['County'] == county]
     countydeath = deaths.loc[deaths['County'] == county]
     countyhosp = knownhosp.loc[knownhosp['County'] == county]  # verified
     countytruehosp = hospitalizations.loc[hospitalizations['County'] == county]  # total known and unknown dates
 
+    # performs relevant calculations
     sumDeaths = countydeath['Deaths'].sum()
     sumCases = countycase['NewPos_All'].sum()
     sumHosp = countytruehosp['Hospitalizations'].sum()
-    print('Total YTD cases in ' + county + ' as of ' + str(onlineupdate) + ': ' + str(sumCases))
-    print('Total YTD deaths in ' + county + ' as of ' + str(onlineupdate) + ': ' + str(sumDeaths))
-    print('YTD Death to case ratio in ' + county + ' as of ' + str(onlineupdate) + ': ' + str(
-        ratioer(sumDeaths, sumCases)))
-    print('YTD Hospitalization to case ratio in ' + county + ' as of ' + str(onlineupdate) + ': ' + str(
-        ratioer(sumHosp, sumCases)))
-    print('YTD Hospitalization to death ratio in ' + county + ' as of ' + str(onlineupdate) + ': ' + str(
-        ratioer(sumHosp, sumDeaths)))
-    print('YTD Case to population ratio in ' + county + ' as of ' + str(onlineupdate) + ': ' + str(
-        ratioer(sumCases, population.countypopulation[county])))
-    print('YTD Death to population ratio in ' + county + ' as of ' + str(onlineupdate) + ': ' + str(
-        ratioer(sumDeaths, population.countypopulation[county])))
-    print('YTD Hospitalization to population ratio in ' + county + ' as of ' + str(onlineupdate) + ': ' + str(
-        ratioer(sumHosp, population.countypopulation[county])))
+    deathtocase = sumDeaths / sumCases
+    hosptocase = sumHosp / sumCases
+    deathtohosp = sumDeaths / sumHosp
+    casetopop = sumCases / population.countypopulation[county]
+    deathtopop = sumDeaths / population.countypopulation[county]
+    hosptopop = sumHosp / population.countypopulation[county]
 
+    # displays relevant data
+    print('Total YTD cases in {0} as of {1}: {2}'.format(county, str(onlineupdate), str(sumCases)))
+    print('Total YTD deaths in {0} as of {1}: {2}'.format(county, str(onlineupdate), str(sumDeaths)))
+    print('Total YTD hospitalizations in {0} as of {1}: {2}'.format(county, str(onlineupdate), str(sumHosp)))
+    print('YTD Death to case ratio in {0} as of {1}: {2} ({3}%)'.format(county,
+                                                                        str(onlineupdate),
+                                                                        str(deathtocase),
+                                                                        str(deathtocase * 100)))
+    print('YTD Hospitalization to case ratio in {0} as of {1}: {2} ({3}%)'.format(county,
+                                                                                  str(onlineupdate),
+                                                                                  str(hosptocase),
+                                                                                  str(hosptocase * 100)))
+    print('YTD death to hospitalization ratio in {0} as of {1}: {2} ({3}%)'.format(county,
+                                                                                   str(onlineupdate),
+                                                                                   str(deathtohosp),
+                                                                                   str(deathtohosp * 100)))
+    print('YTD Case to population ratio in {0} as of {1}: {2} ({3}%)'.format(county,
+                                                                             str(onlineupdate),
+                                                                             str(casetopop),
+                                                                             str(casetopop * 100)))
+    print(
+        'YTD Death to population ratio in {0} as of {1}: {2} ({3}%)'.format(county,
+                                                                            str(onlineupdate),
+                                                                            str(deathtopop),
+                                                                            str(deathtopop * 100)))
+    print('YTD Hospitalization to population ratio in {0} as of {1}: {2} ({3}%)'.format(county,
+                                                                                        str(onlineupdate),
+                                                                                        str(hosptopop),
+                                                                                        str(hosptopop * 100)))
+
+    # my plots still need a lot of work with regards to the xticks
     gs = gridspec.GridSpec(2, 2)
     fig = plt.figure()
     ax1 = fig.add_subplot(gs[0, 0])
