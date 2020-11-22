@@ -89,15 +89,19 @@ population = WAPop()
 # fun style
 plt.style.use('ggplot')
 
-print('*********************')
-print('*COVID-19 Visualizer*')
-print('*********************\n')
+print('                           )        (   (      ')
+print(' (  (      (         (  ( /(        )\\ ))\\ )   ')
+print(' )\\))(    )\\        )\\ )\\())(   ( (()/(()/(   ')
+print('((_)()\\ |(((_)(    (((_|(_)\\ )\\  )\\ /(_))(_))  ')
+print('_(())\\_)()\\ _ )\\   )\\___ ((_|(_)((_|_))(_))_   ')
+print('\\ \\((_)/ (_)_\\(_) ((/ __/ _ \\ \\ / /|_ _||   \\  ')
+print(' \\ \\/\\/ / / _ \\    | (_| (_) \\ V /  | | | |) | ')
+print('  \\_/\\_/ /_/ \\_\\    \\___\\___/ \\_/  |___||___/  ')
 
 onlineupdate = 'unknown'
-
 if hasconnection():
     onlinedatasetinfo = requests.head('https://www.doh.wa.gov/Portals/1/Documents/1600/coronavirus/data-tables'
-                                      '/PUBLIC_CDC_Event_Date_SARS.xlsx?ver=20201121144748')
+                                      '/PUBLIC_CDC_Event_Date_SARS.xlsx')
     onlineupdate = datetime.strptime(onlinedatasetinfo.headers['Last-Modified'], '%a, %d %b %Y %H:%M:%S GMT')
     if os.path.isfile('PUBLIC_CDC_Event_Date_SARS.xlsx'):
         downloaded = os.stat('PUBLIC_CDC_Event_Date_SARS.xlsx').st_mtime
@@ -211,7 +215,7 @@ while True:
     print('Total YTD deaths in {0} as of {1}: {2}'.format(county, str(onlineupdate), str(sumDeaths)))
     print('Total YTD hospitalizations in {0} as of {1}: {2}'.format(county, str(onlineupdate), str(sumHosp)))
     print('YTD Death to case ratio in {0} as of {1}: {2} ({3}%)'.format(county,
-                                                                        str(onlineupdate),
+                                                                        onlineupdate,
                                                                         str(deathtocase),
                                                                         str(deathtocase * 100)))
     print('YTD Hospitalization to case ratio in {0} as of {1}: {2} ({3}%)'.format(county,
