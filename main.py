@@ -124,7 +124,11 @@ if hasconnection():
                                       '/PUBLIC_CDC_Event_Date_SARS.xlsx?ver=20201121144748')
         open('PUBLIC_CDC_Event_Date_SARS.xlsx', 'wb').write(downloadedFile.content)
 else:
-    print('As there is no connection detected, proceeding to next part of the program')
+    if os.path.isfile('PUBLIC_CDC_Event_Date_SARS.xlsx'):
+        print('As there is no connection detected, proceeding to next part of the program')
+    else:
+        quit()
+
 
 # reading the file's data
 excelFile = pd.ExcelFile('PUBLIC_CDC_Event_Date_SARS.xlsx')
